@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+
+# Training outputs
+*.pt
+training_curves.png
