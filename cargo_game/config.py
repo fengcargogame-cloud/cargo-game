@@ -15,8 +15,8 @@ class GameConfig:
 
     num_tunnels: int = 5
     tunnel_length: int = 10
-    max_cargos: int = 10
-    num_colors: int = 3
+    max_cargos: int = 14
+    num_colors: int = 5
 
     penalty_exceed_max: float = 8.0
     penalty_color_change: float = 1.0
@@ -140,12 +140,60 @@ class StaticGameConfig(GameConfig):
     # num_episodes: int = 2000
     # mcts_simulations: int = 300
 
+    # value_scale: float = 90.0            # returns are about -50..+12.5
+    # num_episodes: int = 5000
+    # mcts_simulations: int = 300
+    # num_tunnels: int = 7
+    # tunnel_length: int = 16
+    # num_colors: int = 4
+    # # (length, color, min_left, max_right) per cargo
+    # pieces: Tuple[Tuple[int, int, int, int], ...] = (
+    #     (4, 0, 3, 5),
+    #     (9, 0, 0, 3),
+    #     (4, 0, 3, 7),
+    #     (10, 0, 5, 9),
+    #     (5, 3, 0, 5), 
+    #     (5, 1, 0, 5),
+    #     (7, 3, 5, 12),
+    #     (4, 3, 12, 16),
+    #     (5, 1, 5, 10),
+    #     (6, 1, 10, 16),
+    #     (19, 0, 9, 16),
+    #     (6, 2, 0, 3),
+    #     (19, 2, 3, 13),
+    #     (7, 2, 12, 16),
+    # )
+
+    # value_scale: float = 90.0            # returns are about -50..+12.5
+    # num_episodes: int = 5000
+    # mcts_simulations: int = 300
+    # num_tunnels: int = 8
+    # tunnel_length: int = 16
+    # num_colors: int = 4
+    # # (length, color, min_left, max_right) per cargo
+    # pieces: Tuple[Tuple[int, int, int, int], ...] = (
+    #     (4, 0, 3, 5),
+    #     (9, 0, 0, 3),
+    #     (4, 0, 3, 7),
+    #     (10, 0, 5, 9),
+    #     (5, 3, 0, 5), 
+    #     (10, 1, 0, 5),
+    #     (7, 3, 5, 12),
+    #     (4, 3, 12, 16),
+    #     (10, 1, 5, 10),
+    #     (11, 1, 10, 16),
+    #     (19, 0, 9, 16),
+    #     (6, 2, 0, 3),
+    #     (19, 2, 3, 13),
+    #     (7, 2, 12, 16),
+    # )
+
     value_scale: float = 90.0            # returns are about -50..+12.5
-    num_episodes: int = 5000
+    num_episodes: int = 9990
     mcts_simulations: int = 300
-    num_tunnels: int = 7
+    num_tunnels: int = 9
     tunnel_length: int = 16
-    num_colors: int = 4
+    num_colors: int = 5
     # (length, color, min_left, max_right) per cargo
     pieces: Tuple[Tuple[int, int, int, int], ...] = (
         (4, 0, 3, 5),
@@ -153,15 +201,17 @@ class StaticGameConfig(GameConfig):
         (4, 0, 3, 7),
         (10, 0, 5, 9),
         (5, 3, 0, 5), 
-        (5, 1, 0, 5),
+        (10, 1, 0, 5),
         (7, 3, 5, 12),
         (4, 3, 12, 16),
-        (5, 1, 5, 10),
-        (6, 1, 10, 16),
+        (10, 1, 5, 10),
+        (11, 1, 10, 16),
         (19, 0, 9, 16),
         (6, 2, 0, 3),
         (19, 2, 3, 13),
-        (7, 2, 12, 16),
+        (7, 2, 12, 16), 
+        (2, 0, 14, 16),
+        (14, 4, 0, 14),
     )
 
     # value_scale: float = 90.0            # returns are about -50..+12.5
@@ -241,6 +291,11 @@ class StaticGameConfig(GameConfig):
     # )
 
     def __post_init__(self) -> None:
+        for i, piece in enumerate(self.pieces):
+            if not isinstance(piece, tuple) or len(piece) != 4:
+                raise ValueError(f"pieces[{i}] must be a 4-tuple (length, color, min_left, max_right), got {piece!r}")
+            if not 0 <= piece[1] < self.num_colors:
+                raise ValueError(f"pieces[{i}] has color {piece[1]}, but num_colors is {self.num_colors}")
         self.max_cargos = len(self.pieces)
 
     def episode_pieces(self, rng: random.Random) -> List["CargoPiece"]:
