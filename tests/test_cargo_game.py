@@ -41,6 +41,12 @@ def test_masking_and_urgency() -> None:
     assert cands[0][0].piece_id == 1, "tightest-deadline piece should rank first"
     assert env.legal_modes(cands[0][0], 0) == [ActionMode.CUT_AT_MAX], "overflowing WHOLE should be masked"
 
+    # A short cargo at the tunnel end has zero slack but can wait while tunnels are open;
+    # a long cargo that needs several tunnels is the urgent one.
+    env = CargoTunnelEnv(DynamicGameConfig(num_tunnels=3, tunnel_length=16, max_cargos=2))
+    env.reset(pieces=[CargoPiece(1, 0, 2, 0, 14, 16), CargoPiece(2, 1, 19, 0, 9, 16)])
+    assert env.candidates()[0][0].piece_id == 2, "piece needing 3 tunnels should outrank one that can wait"
+
 
 def test_clone_isolation() -> None:
     env = _manual_env()

@@ -74,24 +74,42 @@ class CargoTunnelEnv:
 
     # ---------------- stage-wise legality (with masking) ----------------
 
+    def segments_needed(self, piece: CargoPiece) -> int:
+        """How many tunnels the piece needs to fit inside its [min_left, max_right] window."""
+        window = min(piece.max_right, self.config.tunnel_length) - piece.min_left
+        return 1 if window <= 0 else -(-piece.length // window)
+
     def candidates(self) -> List[Tuple[CargoPiece, float]]:
-        """Urgency-ranked placeable pieces: [(piece, urgency)], most urgent first."""
+        """Urgency-ranked placeable pieces: [(piece, urgency)], most urgent first.
+
+        Urgency is the pressure from waiting: segments the piece still needs divided by the
+        tunnels where it can still start at its min_left. A piece that can wait (e.g. a short
+        cargo near the tunnel end while many tunnels are still open) ranks low, even if its own
+        window is tight. Once no tunnel can take it on time, urgency falls back to its slack.
+        """
         if self._cand_cache is not None:
             return self._cand_cache
-        scored: List[Tuple[float, int, CargoPiece]] = []
+        scored: List[Tuple[float, int, int, CargoPiece]] = []
         for piece in self.unassigned:
             best_slack = None
+            on_time = 0
             for t in range(self.config.num_tunnels):
                 if not self.raw_modes(piece, t):
                     continue
-                slack = piece.max_right - self.tunnels[t].next_left_for(piece) - piece.length
+                left = self.tunnels[t].next_left_for(piece)
+                if left == piece.min_left:
+                    on_time += 1
+                slack = piece.max_right - left - piece.length
                 best_slack = slack if best_slack is None else max(best_slack, slack)
             if best_slack is None:
                 continue  # cannot be placed anywhere right now
-            urgency = 1.0 / (1.0 + max(0.0, float(best_slack)))
-            scored.append((urgency, piece.piece_id, piece))
-        scored.sort(key=lambda x: (-x[0], x[1]))
-        self._cand_cache = [(p, u) for u, _, p in scored[: self.config.max_piece_candidates]]
+            if on_time:
+                urgency = min(1.0, self.segments_needed(piece) / on_time)
+            else:
+                urgency = 1.0 / (1.0 + max(0.0, float(best_slack)))
+            scored.append((urgency, best_slack, piece.piece_id, piece))
+        scored.sort(key=lambda x: (-x[0], x[1], x[2]))
+        self._cand_cache = [(p, u) for u, _, _, p in scored[: self.config.max_piece_candidates]]
         return self._cand_cache
 
     def legal_tunnels(self, piece: CargoPiece) -> List[int]:
@@ -99,15 +117,26 @@ class CargoTunnelEnv:
         if not self.config.mask_color_change:
             return raw
         cand_pieces = [p for p, _ in self.candidates()]
+        on_time = [t for t in raw if self.tunnels[t].next_left_for(piece) == piece.min_left]
+        need = self.segments_needed(piece)
         kept = []
         for t in raw:
             last = self.tunnels[t].last_color
             if last is not None and last != piece.color:
+                # (a) a piece of the tunnel's own colour could take this slot instead
                 same_colour_fits = any(
                     p.color == last and p.piece_id != piece.piece_id and self.raw_modes(p, t)
                     for p in cand_pieces
                 )
                 if same_colour_fits:
+                    continue
+                # (b) the piece fits here whole but can afford to wait: enough other tunnels can
+                #     still take it on time, so a same-colour tail may yet appear for it. A piece
+                #     that would be cut here is already paying for the split; where its fragment
+                #     goes is a packing choice left to the search.
+                left = self.tunnels[t].next_left_for(piece)
+                fits_whole = left + piece.length <= piece.max_right
+                if fits_whole and sum(1 for u in on_time if u != t) >= need:
                     continue
             kept.append(t)
         return kept or raw   # never mask everything away

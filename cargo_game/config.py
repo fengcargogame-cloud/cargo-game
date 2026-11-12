@@ -189,7 +189,7 @@ class StaticGameConfig(GameConfig):
     # )
 
     value_scale: float = 90.0            # returns are about -50..+12.5
-    num_episodes: int = 9990
+    num_episodes: int = 5990
     mcts_simulations: int = 300
     num_tunnels: int = 9
     tunnel_length: int = 16
