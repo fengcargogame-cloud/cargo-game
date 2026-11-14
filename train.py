@@ -27,7 +27,7 @@ def main() -> None:
         _, agent_reward, agent_env = trainer.self_play_episode(explore=False)
         print(f"Optimal reward={best:.2f} | agent reward={agent_reward:.2f} | "
               f"{'OPTIMAL' if math.isclose(agent_reward, best) else 'SUBOPTIMAL'}")
-        print("Optimal actions:", [(a.piece_id, a.tunnel_id, a.mode.value) for a in actions])
+        print("Optimal actions:", [(a.piece_id, a.tunnel_id, a.mode.value, a.cut_end) for a in actions])
         print(agent_env.render_text())
         print(agent_env.render_grid())
 

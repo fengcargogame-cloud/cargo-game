@@ -5,15 +5,16 @@ Every placement is decided as three successive tree levels:
 
     real state s  ──(stage 0: which piece?)──►  (s, piece)
                   ──(stage 1: which tunnel?)─►  (s, piece, tunnel)
-                  ──(stage 2: whole or cut?)─►  real state s'   (env.step happens here)
+                  ──(stage 2: whole, cut at max_right, or cut early?)─►  real state s'   (env.step happens here)
 
 Each level is a genuine MCTS node with its own visit counts, Q-values and PUCT
-selection, so branching per level is M, K and <=2 instead of M*K*2 at one level.
+selection, so branching per level is M, K and a few placement options instead of their product at one level.
 
 The network mirrors the tree: a set-transformer encodes tunnels + pieces, then
   - piece head   : pointer over candidate pieces          + V(s)
   - tunnel head  : pointer over tunnels, given the piece   + Q(s, piece)
-  - mode head    : WHOLE/CUT, given piece and tunnel       + Q(s, piece, tunnel)
+  - mode head    : pointer over placement options (whole / cut at max / each early cut),
+                   given piece and tunnel                  + Q(s, piece, tunnel)
 Each head is trained on the visit distribution of its own tree level.
 
 Also included: urgency (deadline) prior, action masking, top-K expansion,

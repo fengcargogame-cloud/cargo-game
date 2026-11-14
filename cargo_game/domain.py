@@ -9,10 +9,19 @@ from typing import List, Optional, Tuple
 
 class ActionMode(str, Enum):
     WHOLE = "whole"
-    CUT_AT_MAX = "cut_at_max"
+    CUT_AT_MAX = "cut_at_max"    # cut so the placed segment ends at the piece's max_right
+    CUT_EARLY = "cut_early"      # cut short of max_right, at a chosen end position
 
 
-MODES: Tuple[ActionMode, ActionMode] = (ActionMode.WHOLE, ActionMode.CUT_AT_MAX)
+MODES: Tuple[ActionMode, ...] = (ActionMode.WHOLE, ActionMode.CUT_AT_MAX, ActionMode.CUT_EARLY)
+
+
+@dataclass(frozen=True)
+class Placement:
+    """One stage-2 option for a (piece, tunnel) pair: how to place, and where the segment ends."""
+
+    mode: ActionMode
+    end: int
 
 
 @dataclass(frozen=True)
@@ -43,6 +52,7 @@ class Action:
     piece_id: int          # stable id, not a list index
     tunnel_id: int
     mode: ActionMode
+    cut_end: Optional[int] = None   # end position of the placed segment; only read for CUT_EARLY
 
 
 class Tunnel:

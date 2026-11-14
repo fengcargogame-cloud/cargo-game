@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from .config import GameConfig
-from .domain import Action, ActionMode, CargoPiece, PlacedPiece, Tunnel
+from .domain import Action, ActionMode, CargoPiece, PlacedPiece, Placement, Tunnel
 
 
 class CargoTunnelEnv:
@@ -23,6 +23,7 @@ class CargoTunnelEnv:
         self.num_cuts = 0
         self.step_count = 0
         self._cand_cache: Optional[List[Tuple[CargoPiece, float]]] = None
+        self._cut_cache: Optional[List[int]] = None
 
     # ---------------- lifecycle ----------------
 
@@ -37,6 +38,7 @@ class CargoTunnelEnv:
         self.num_cuts = 0
         self.step_count = 0
         self._cand_cache = None
+        self._cut_cache = None
 
     def clone(self) -> "CargoTunnelEnv":
         env = CargoTunnelEnv(self.config)
@@ -63,14 +65,26 @@ class CargoTunnelEnv:
             return fit
         return 0
 
-    def raw_modes(self, piece: CargoPiece, tunnel_id: int) -> List[ActionMode]:
+    def cut_points(self) -> List[int]:
+        """Where an early cut may end: the min_left of every unplaced piece."""
+        if self._cut_cache is None:
+            self._cut_cache = sorted({p.min_left for p in self.unassigned})
+        return self._cut_cache
+
+    def placements(self, piece: CargoPiece, tunnel_id: int) -> List[Placement]:
+        """Every raw (unmasked) way to put the piece in the tunnel: whole, cut at max_right, or
+        cut early at a cut point strictly inside the segment and short of max_right."""
         left = self.tunnels[tunnel_id].next_left_for(piece)
-        modes = []
+        options = []
         if self._fits(left, piece.length):
-            modes.append(ActionMode.WHOLE)
+            options.append(Placement(ActionMode.WHOLE, left + piece.length))
         if self.cut_length(piece, tunnel_id) > 0:
-            modes.append(ActionMode.CUT_AT_MAX)
-        return modes
+            options.append(Placement(ActionMode.CUT_AT_MAX, piece.max_right))
+        if self.config.allow_early_cut:
+            limit = min(left + piece.length, piece.max_right)
+            options.extend(Placement(ActionMode.CUT_EARLY, end) for end in self.cut_points()
+                           if left < end < limit and self._fits(left, end - left))
+        return options
 
     # ---------------- stage-wise legality (with masking) ----------------
 
@@ -94,7 +108,7 @@ class CargoTunnelEnv:
             best_slack = None
             on_time = 0
             for t in range(self.config.num_tunnels):
-                if not self.raw_modes(piece, t):
+                if not self.placements(piece, t):
                     continue
                 left = self.tunnels[t].next_left_for(piece)
                 if left == piece.min_left:
@@ -113,9 +127,9 @@ class CargoTunnelEnv:
         return self._cand_cache
 
     def legal_tunnels(self, piece: CargoPiece) -> List[int]:
-        raw = [t for t in range(self.config.num_tunnels) if self.raw_modes(piece, t)]
+        raw = [t for t in range(self.config.num_tunnels) if self.placements(piece, t)]
         if not self.config.mask_color_change:
-            return raw
+            return self._drop_symmetric(raw)
         cand_pieces = [p for p, _ in self.candidates()]
         on_time = [t for t in raw if self.tunnels[t].next_left_for(piece) == piece.min_left]
         need = self.segments_needed(piece)
@@ -125,7 +139,7 @@ class CargoTunnelEnv:
             if last is not None and last != piece.color:
                 # (a) a piece of the tunnel's own colour could take this slot instead
                 same_colour_fits = any(
-                    p.color == last and p.piece_id != piece.piece_id and self.raw_modes(p, t)
+                    p.color == last and p.piece_id != piece.piece_id and self.placements(p, t)
                     for p in cand_pieces
                 )
                 if same_colour_fits:
@@ -136,18 +150,30 @@ class CargoTunnelEnv:
                 #     goes is a packing choice left to the search.
                 left = self.tunnels[t].next_left_for(piece)
                 fits_whole = left + piece.length <= piece.max_right
-                if fits_whole and sum(1 for u in on_time if u != t) >= need:
+                if (self.config.mask_wait_for_color and fits_whole
+                        and sum(1 for u in on_time if u != t) >= need):
                     continue
             kept.append(t)
-        return kept or raw   # never mask everything away
+        return self._drop_symmetric(kept or raw)   # never mask everything away
 
-    def legal_modes(self, piece: CargoPiece, tunnel_id: int) -> List[ActionMode]:
-        modes = self.raw_modes(piece, tunnel_id)
-        if self.config.mask_overflow_whole and len(modes) == 2:
+    def _drop_symmetric(self, tunnel_ids: List[int]) -> List[int]:
+        if not self.config.mask_symmetric_tunnels:
+            return tunnel_ids
+        seen, out = set(), []
+        for t in tunnel_ids:
+            state = (self.tunnels[t].current_right, self.tunnels[t].last_color)
+            if state not in seen:
+                seen.add(state)
+                out.append(t)
+        return out
+
+    def legal_placements(self, piece: CargoPiece, tunnel_id: int) -> List[Placement]:
+        options = self.placements(piece, tunnel_id)
+        if self.config.mask_overflow_whole and any(o.mode == ActionMode.CUT_AT_MAX for o in options):
             left = self.tunnels[tunnel_id].next_left_for(piece)
             if left + piece.length > piece.max_right:
-                return [ActionMode.CUT_AT_MAX]
-        return modes
+                return [o for o in options if o.mode != ActionMode.WHOLE]
+        return options
 
     def piece_by_id(self, piece_id: int) -> CargoPiece:
         for p in self.unassigned:
@@ -167,7 +193,9 @@ class CargoTunnelEnv:
     def step(self, action: Action) -> Tuple[float, bool, Dict]:
         cfg = self.config
         piece = self.piece_by_id(action.piece_id)
-        if action.mode not in self.raw_modes(piece, action.tunnel_id):
+        choice = next((o for o in self.placements(piece, action.tunnel_id) if o.mode == action.mode
+                       and (o.mode != ActionMode.CUT_EARLY or o.end == action.cut_end)), None)
+        if choice is None:
             raise ValueError(f"Illegal action {action}")
 
         self.step_count += 1
@@ -181,10 +209,8 @@ class CargoTunnelEnv:
         # if tunnel.placed:
         #     penalty += (left - tunnel.current_right) * cfg.penalty_gap
 
-        if action.mode == ActionMode.WHOLE:
-            placed_len = piece.length
-        else:
-            placed_len = self.cut_length(piece, action.tunnel_id)
+        placed_len = choice.end - left
+        if action.mode != ActionMode.WHOLE:
             penalty += cfg.penalty_cut
             self.num_cuts += 1
         remainder_len = piece.length - placed_len
@@ -201,6 +227,7 @@ class CargoTunnelEnv:
             self.next_piece_id += 1
 
         self._cand_cache = None
+        self._cut_cache = None
         penalty += self.compute_overflow_penalty() - overflow_before
 
         bonus = cfg.cargo_reward if remainder_len == 0 else 0.0
@@ -252,7 +279,7 @@ class CargoTunnelEnv:
         return 2 + self.config.num_colors + 1
 
     PAIR_DIM = 8
-    MODE_DIM = 5
+    OPTION_DIM = 9
     GLOBAL_DIM = 3
 
     def piece_features(self) -> np.ndarray:
@@ -305,17 +332,27 @@ class CargoTunnelEnv:
             ])
         return np.asarray(rows, dtype=np.float32)
 
-    def mode_features(self, piece: CargoPiece, tunnel_id: int) -> np.ndarray:
-        L = float(self.config.tunnel_length)
+    def option_features(self, piece: CargoPiece, tunnel_id: int, options: List[Placement]) -> np.ndarray:
+        """(len(options), OPTION_DIM): what each stage-2 option would do."""
+        cfg, L = self.config, float(self.config.tunnel_length)
         left = self.tunnels[tunnel_id].next_left_for(piece)
-        cut = self.cut_length(piece, tunnel_id)
-        return np.asarray([
-            max(0, left + piece.length - piece.max_right) / L,
-            cut / piece.length,
-            (piece.length - cut) / piece.length if cut else 0.0,
-            1.0 if cut else 0.0,
-            1.0 if piece.was_cut else 0.0,
-        ], dtype=np.float32)
+        rows = []
+        for o in options:
+            placed = o.end - left
+            # pieces that could start exactly on time right behind this segment
+            followers = sum(1 for p in self.unassigned if p.min_left == o.end and p.piece_id != piece.piece_id)
+            rows.append([
+                1.0 if o.mode == ActionMode.WHOLE else 0.0,
+                1.0 if o.mode == ActionMode.CUT_AT_MAX else 0.0,
+                1.0 if o.mode == ActionMode.CUT_EARLY else 0.0,
+                placed / piece.length,
+                (piece.length - placed) / piece.length,
+                o.end / L,
+                max(0, o.end - piece.max_right) / L,
+                followers / max(1, cfg.max_cargos),
+                1.0 if piece.was_cut else 0.0,
+            ])
+        return np.asarray(rows, dtype=np.float32).reshape(-1, self.OPTION_DIM)
 
     # ---------------- display ----------------
 

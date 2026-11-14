@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Dict, List, Tuple
 
-from .domain import Action, ActionMode
+from .domain import Action, Placement
 from .env import CargoTunnelEnv
 
 
@@ -17,7 +17,7 @@ def brute_force_optimum(env: CargoTunnelEnv) -> Tuple[float, List[Action]]:
     unassigned piece at a time, so moves are keyed by original_id (piece ids of cut remainders
     depend on cut order) and mapped back to piece ids by replaying the best line at the end.
     """
-    memo: Dict[tuple, Tuple[float, List[Tuple[int, int, ActionMode]]]] = {}
+    memo: Dict[tuple, Tuple[float, List[Tuple[int, int, Placement]]]] = {}
 
     def key(e: CargoTunnelEnv) -> tuple:
         open_ids = {p.original_id for p in e.unassigned}
@@ -29,28 +29,28 @@ def brute_force_optimum(env: CargoTunnelEnv) -> Tuple[float, List[Action]]:
         return (tuple((t.current_right, t.last_color) for t in e.tunnels),
                 pieces, tuple(sorted(worst.items())), e.step_count)
 
-    def search(e: CargoTunnelEnv) -> Tuple[float, List[Tuple[int, int, ActionMode]]]:
+    def search(e: CargoTunnelEnv) -> Tuple[float, List[Tuple[int, int, Placement]]]:
         if e.is_terminal():
             return 0.0, []
         k = key(e)
         if k in memo:
             return memo[k]
-        best: Tuple[float, List[Tuple[int, int, ActionMode]]] = (-math.inf, [])
+        best: Tuple[float, List[Tuple[int, int, Placement]]] = (-math.inf, [])
         for piece in list(e.unassigned):
             for t in range(e.config.num_tunnels):
-                for mode in e.raw_modes(piece, t):
+                for option in e.placements(piece, t):
                     child = e.clone()
-                    r, done, _ = child.step(Action(piece.piece_id, t, mode))
+                    r, done, _ = child.step(Action(piece.piece_id, t, option.mode, option.end))
                     rest, rest_moves = (0.0, []) if done else search(child)
                     if r + rest > best[0]:
-                        best = (r + rest, [(piece.original_id, t, mode)] + rest_moves)
+                        best = (r + rest, [(piece.original_id, t, option)] + rest_moves)
         memo[k] = best
         return best
 
     value, moves = search(env)
     replay, actions = env.clone(), []
-    for original_id, t, mode in moves:
+    for original_id, t, option in moves:
         piece = next(p for p in replay.unassigned if p.original_id == original_id)
-        actions.append(Action(piece.piece_id, t, mode))
+        actions.append(Action(piece.piece_id, t, option.mode, option.end))
         replay.step(actions[-1])
     return value, actions

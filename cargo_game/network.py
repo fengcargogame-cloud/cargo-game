@@ -50,9 +50,11 @@ class HierarchicalPolicyValueNet(nn.Module):
         self.pair_in = mlp(CargoTunnelEnv.PAIR_DIM, d, d)
         self.tunnel_ptr = Pointer(d)
         self.v1 = mlp(d, d, 1)
-        # Stage 2: mode head conditioned on piece and tunnel + Q(s, piece, tunnel)
-        self.mode_ctx = mlp(2 * d + CargoTunnelEnv.MODE_DIM, d, d)
-        self.mode_out = nn.Linear(d, 2)
+        # Stage 2: pointer over the placement options (whole / cut at max / each early cut),
+        # conditioned on piece and tunnel + Q(s, piece, tunnel)
+        self.mode_ctx = mlp(2 * d, d, d)
+        self.option_in = mlp(CargoTunnelEnv.OPTION_DIM, d, d)
+        self.option_ptr = Pointer(d)
         self.v2 = mlp(d, d, 1)
 
     # ---- shared encoder ----
@@ -81,7 +83,8 @@ class HierarchicalPolicyValueNet(nn.Module):
         logits = masked_logits(self.tunnel_ptr(keys, ctx), tunnel_mask)
         return logits, torch.tanh(self.v1(ctx)).squeeze(-1), ctx, keys
 
-    def stage2(self, ctx1, key_tunnel, mode_x, mode_mask):
-        ctx = self.mode_ctx(torch.cat([ctx1, key_tunnel, mode_x], dim=-1))
-        logits = masked_logits(self.mode_out(ctx), mode_mask)
+    def stage2(self, ctx1, key_tunnel, option_x, option_mask):
+        """option_x (B,O,OPTION_DIM) option_mask (B,O)."""
+        ctx = self.mode_ctx(torch.cat([ctx1, key_tunnel], dim=-1))
+        logits = masked_logits(self.option_ptr(self.option_in(option_x), ctx), option_mask)
         return logits, torch.tanh(self.v2(ctx)).squeeze(-1)

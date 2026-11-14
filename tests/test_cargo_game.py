@@ -7,7 +7,7 @@ import math
 import numpy as np
 
 from cargo_game.config import DynamicGameConfig, StaticGameConfig
-from cargo_game.domain import Action, ActionMode, CargoPiece, MODES
+from cargo_game.domain import Action, ActionMode, CargoPiece, Placement
 from cargo_game.env import CargoTunnelEnv
 from cargo_game.evaluators import UniformEvaluator
 from cargo_game.mcts import HierarchicalMCTS, pick
@@ -39,7 +39,8 @@ def test_masking_and_urgency() -> None:
     env = _manual_env(mask_overflow_whole=True)
     cands = env.candidates()
     assert cands[0][0].piece_id == 1, "tightest-deadline piece should rank first"
-    assert env.legal_modes(cands[0][0], 0) == [ActionMode.CUT_AT_MAX], "overflowing WHOLE should be masked"
+    modes = {o.mode for o in env.legal_placements(cands[0][0], 0)}
+    assert ActionMode.CUT_AT_MAX in modes and ActionMode.WHOLE not in modes, "overflowing WHOLE should be masked"
 
     # A short cargo at the tunnel end has zero slack but can wait while tunnels are open;
     # a long cargo that needs several tunnels is the urgent one.
@@ -66,7 +67,7 @@ def test_tree_has_three_stages() -> None:
     assert n1.stage == 1 and n1.env is root.env, "piece choice must not change the env"
     assert all(k in range(cfg.num_tunnels) for k in n1.children)
     n2 = max(n1.children.values(), key=lambda n: n.visits)
-    assert n2.stage == 2 and set(n2.children) <= set(MODES)
+    assert n2.stage == 2 and all(isinstance(k, Placement) for k in n2.children)
     n3 = max(n2.children.values(), key=lambda n: n.visits)
     assert n3.stage == 0 and n3.env.step_count == 1, "mode choice performs the real step"
     assert root.visits == cfg.mcts_simulations
@@ -82,7 +83,7 @@ def test_mcts_prefers_cut_over_overflow() -> None:
     mcts = HierarchicalMCTS(UniformEvaluator(), cfg)
     root = mcts.run(mcts.new_root(env), add_noise=False)
     n2 = root.children[0].children[0]
-    assert pick(n2, False, np.random.default_rng(0)) == ActionMode.CUT_AT_MAX
+    assert pick(n2, False, np.random.default_rng(0)).mode == ActionMode.CUT_AT_MAX
 
 
 def test_network_and_train_step() -> None:
@@ -114,10 +115,59 @@ def test_static_game() -> None:
     assert math.isclose(sum(env.step(x)[0] for x in actions), best) and env.is_terminal()
 
 
+def test_early_cut() -> None:
+    # Cargo and capacity are both 68 cells, so everything fits only with no gap. Cargos 2-4 cannot
+    # start before 7, and only a cut of cargo 1 that stops at 7 (short of its max_right, 17) can
+    # fill the cells in front of them.
+    pieces = ((15, 0, 0, 4), (20, 1, 3, 17), (6, 2, 7, 12), (11, 3, 7, 17), (12, 4, 10, 17),
+              (1, 5, 4, 5), (1, 6, 5, 6), (1, 7, 6, 7), (1, 8, 7, 8))
+    cfg = StaticGameConfig(num_tunnels=4, tunnel_length=17, num_colors=9, pieces=pieces)
+    env = CargoTunnelEnv(cfg)
+    env.reset()
+    whole, cut, early = ActionMode.WHOLE, ActionMode.CUT_AT_MAX, ActionMode.CUT_EARLY
+    line = [(0, 0, cut, None), (0, 1, cut, None), (0, 2, cut, None), (0, 3, whole, None),
+            (1, 3, cut, None), (1, 0, early, 7), (1, 1, whole, None),
+            (5, 2, whole, None), (6, 2, whole, None), (7, 2, whole, None), (8, 2, whole, None),
+            (3, 0, cut, None), (2, 1, cut, None), (4, 1, cut, None),
+            (2, 2, whole, None), (3, 2, whole, None), (4, 2, whole, None)]
+    total = 0.0
+    for original_id, tunnel_id, mode, cut_end in line:
+        piece = next(p for p in env.unassigned if p.original_id == original_id)
+        if mode == early:
+            assert Placement(early, cut_end) in env.legal_placements(piece, tunnel_id)
+        total += env.step(Action(piece.piece_id, tunnel_id, mode, cut_end))[0]
+    assert env.is_terminal() and not env.unassigned and env.num_cuts == 8
+    assert math.isclose(total, len(pieces) * cfg.cargo_reward + cfg.completion_bonus
+                        - 8 * cfg.penalty_cut - 13 * cfg.penalty_color_change)
+
+    # An early cut ends only at another piece's min_left, strictly inside the segment; switching
+    # the rule off leaves just WHOLE and CUT_AT_MAX.
+    for allow, expected in ((True, {whole, early}), (False, {whole})):
+        env = CargoTunnelEnv(DynamicGameConfig(num_tunnels=1, tunnel_length=20, max_cargos=2, allow_early_cut=allow))
+        env.reset(pieces=[CargoPiece(1, 0, 8, 0, 0, 20), CargoPiece(2, 1, 4, 1, 3, 10)])
+        options = env.placements(env.piece_by_id(1), 0)
+        assert {o.mode for o in options} == expected
+        assert [o.end for o in options if o.mode == early] == ([3] if allow else [])
+
+
+def test_rollouts_find_real_lines() -> None:
+    # The best finished line a search reports must replay to exactly the return it claims.
+    cfg = DynamicGameConfig(num_tunnels=3, tunnel_length=30, max_cargos=5, mcts_simulations=60)
+    env = CargoTunnelEnv(cfg)
+    env.reset(seed=3)
+    mcts = HierarchicalMCTS(UniformEvaluator(), cfg)
+    root = mcts.run(mcts.new_root(env), add_noise=False)
+    assert mcts.found is not None and root.best is not None
+    claimed, line = mcts.found
+    assert math.isclose(sum(env.step(a)[0] for a in line), claimed) and env.is_terminal()
+    assert math.isclose(root.best * cfg.value_scale, claimed)
+
+
 def run_tests() -> None:
     for t in (test_env_basics, test_masking_and_urgency, test_clone_isolation,
               test_tree_has_three_stages, test_mcts_prefers_cut_over_overflow,
-              test_network_and_train_step, test_static_game):
+              test_network_and_train_step, test_static_game, test_early_cut,
+              test_rollouts_find_real_lines):
         t()
         print(f"  {t.__name__}: passed")
     print("All tests passed.\n")

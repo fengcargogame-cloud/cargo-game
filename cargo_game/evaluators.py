@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .domain import ActionMode, CargoPiece, MODES
+from .domain import CargoPiece, Placement
 from .env import CargoTunnelEnv
 from .network import HierarchicalPolicyValueNet
 
@@ -47,10 +47,12 @@ class NetEvaluator:
         return F.softmax(logits[0], -1).cpu().numpy(), float(v[0])
 
     @torch.no_grad()
-    def eval_tunnel(self, env, cache, slot: int, piece: CargoPiece, tunnel_id: int, legal: List[ActionMode]):
+    def eval_tunnel(self, env, cache, slot: int, piece: CargoPiece, tunnel_id: int, legal: List[Placement]):
+        """Priors are aligned with `legal`, the stage-2 options."""
         ctx, keys = cache[("piece", slot)]
-        mask = np.array([m in legal for m in MODES])
-        logits, v = self.net.stage2(ctx, keys[:, tunnel_id], _t(env.mode_features(piece, tunnel_id), self.device),
+        mask = np.ones(len(legal), dtype=bool)
+        logits, v = self.net.stage2(ctx, keys[:, tunnel_id],
+                                    _t(env.option_features(piece, tunnel_id, legal), self.device),
                                     _t(mask, self.device))
         return F.softmax(logits[0], -1).cpu().numpy(), float(v[0])
 
@@ -68,4 +70,4 @@ class UniformEvaluator:
         return p, 0.0
 
     def eval_tunnel(self, env, cache, slot, piece, tunnel_id, legal):
-        return np.array([1.0 / len(legal) if m in legal else 0.0 for m in MODES]), 0.0
+        return np.ones(len(legal)) / len(legal), 0.0
