@@ -49,9 +49,11 @@ class Trainer:
         self.best_reward = -float("inf")
         self.best_env: Optional[CargoTunnelEnv] = None
         self.best_samples: List[Sample] = []
+        self.best_line: List[Action] = []
         self.history: Dict[str, List[float]] = {k: [] for k in
                                                 ("reward", "penalty", "steps", "loss_piece", "loss_tunnel",
-                                                 "loss_mode", "loss_value")}
+                                                 "loss_mode", "loss_value", "best")}
+        self.greedy_history: List[Tuple[int, float]] = []   # (episode, greedy reward)
 
     # ---------- self-play ----------
 
@@ -63,32 +65,48 @@ class Trainer:
         rewards: List[float] = []
         played: List[Action] = []
         seed_state = env.clone()
+        # `plan` is the best finished continuation known from the current state and `plan_value`
+        # its return-to-go. The game is deterministic, so a plan is a guaranteed result: the greedy
+        # agent follows it, and switches only when the search finds a better finished line.
+        plan: List[Action] = []
+        plan_value = -float("inf")
+        if self.best_line:
+            if not explore:
+                plan, plan_value = list(self.best_line), self.best_reward
+            elif self.rng.random() < cfg.elite_prefix_prob:
+                for action in self.best_line[: int(self.rng.integers(len(self.best_line)))]:
+                    played.append(action)
+                    rewards.append(env.step(action)[0])
         root = self.mcts.new_root(env)
         move = 0
 
         while not env.is_terminal():
             self.mcts.run(root, add_noise=explore)
-            if cfg.elite_fraction > 0 and self.mcts.found is not None:
-                # A simulation finished the game from here; keep the line if it is the best yet.
+            if self.mcts.found is not None:
+                # A simulation finished the game from here.
                 rest, line = self.mcts.found
-                self._adopt_line(seed_state, played + line, sum(rewards) + rest)
+                if rest > plan_value + 1e-9:
+                    plan, plan_value = list(line), rest
+                if cfg.elite_fraction > 0:
+                    self._adopt_line(seed_state, played + line, sum(rewards) + rest)
             temp = explore and move < cfg.temperature_moves
+            follow = self._plan_nodes(root, plan[0]) if plan and not explore else None
 
             # Stage 0: piece
             slots, pi_piece_vals = visit_policy(root)
-            slot = pick(root, temp, self.rng)
+            slot = follow[0] if follow else pick(root, temp, self.rng)
             n1 = root.children[slot]
             if not n1.expanded:
                 self.mcts._expand(n1)
             # Stage 1: tunnel (from the chosen piece's own subtree)
             tunnels, pi_t_vals = visit_policy(n1)
-            tunnel_id = pick(n1, temp, self.rng)
+            tunnel_id = follow[1] if follow else pick(n1, temp, self.rng)
             n2 = n1.children[tunnel_id]
             if not n2.expanded:
                 self.mcts._expand(n2)
             # Stage 2: placement option (whole / cut at max / early cut)
             chosen_options, pi_m_vals = visit_policy(n2)
-            option = pick(n2, temp, self.rng)
+            option = follow[2] if follow else pick(n2, temp, self.rng)
 
             piece = n1.piece
             K = cfg.num_tunnels
@@ -111,6 +129,10 @@ class Trainer:
             played.append(Action(piece.piece_id, tunnel_id, option.mode, option.end))
             r, done, _ = env.step(played[-1])
             rewards.append(r)
+            if plan and played[-1] == plan[0]:
+                plan, plan_value = plan[1:], (plan_value - r) / cfg.gamma
+            else:
+                plan, plan_value = [], -float("inf")
             move += 1
 
             # Subtree reuse: the chosen stage-2 child already holds this exact next state.
@@ -128,6 +150,23 @@ class Trainer:
         if cfg.elite_fraction > 0:
             self._adopt_line(seed_state, played, total)
         return records, total, env
+
+    def _plan_nodes(self, root, action: Action):
+        """(slot, tunnel, placement) tree keys for `action`, or None if the tree does not offer it."""
+        slot = next((s for s, n in root.children.items() if n.piece.piece_id == action.piece_id), None)
+        if slot is None:
+            return None
+        n1 = root.children[slot]
+        if not n1.expanded:
+            self.mcts._expand(n1)
+        n2 = n1.children.get(action.tunnel_id)
+        if n2 is None:
+            return None
+        if not n2.expanded:
+            self.mcts._expand(n2)
+        option = next((o for o in n2.children if o.mode == action.mode
+                       and (o.mode != ActionMode.CUT_EARLY or o.end == action.cut_end)), None)
+        return None if option is None else (slot, action.tunnel_id, option)
 
     def _adopt_line(self, start: CargoTunnelEnv, actions: List[Action], total: float) -> None:
         """Make `actions` (a full game from `start`) the elite episode if it beats the best so far."""
@@ -165,6 +204,7 @@ class Trainer:
             g = r + cfg.gamma * g
             rec.value = float(np.clip(g / cfg.value_scale, -1.0, 1.0))
         self.best_reward, self.best_env, self.best_samples = float(sum(rewards)), env, samples
+        self.best_line = list(actions)
 
     def sample_batch(self) -> List[Sample]:
         cfg = self.cfg
@@ -213,6 +253,7 @@ class Trainer:
             h["reward"].append(ep_reward)
             h["penalty"].append(env.total_penalty())
             h["steps"].append(env.step_count)
+            h["best"].append(self.best_reward if self.best_env is not None else float("nan"))
             for k, v in zip(("loss_piece", "loss_tunnel", "loss_mode", "loss_value"), losses):
                 h[k].append(float(v))
 
@@ -222,6 +263,7 @@ class Trainer:
             if verbose_every and ep % verbose_every == 0:
                 # Greedy (no exploration) game, so the board shows what the agent actually does
                 _, greedy_reward, greedy_env = self.self_play_episode(explore=False)
+                self.greedy_history.append((ep, greedy_reward))
                 best = f" | best so far={self.best_reward:8.2f}" if self.best_env is not None else ""
                 print(f"  greedy reward={greedy_reward:8.2f} | penalty={greedy_env.total_penalty():7.2f}{best}")
                 print(greedy_env.render_grid())
@@ -244,7 +286,15 @@ class Trainer:
         fig, ax = plt.subplots(2, 2, figsize=(13, 8))
         ax[0, 0].plot(ep, h["reward"], alpha=0.3)
         ax[0, 0].plot(ep[len(ep) - len(smooth(h["reward"])):], smooth(h["reward"]))
-        ax[0, 0].set_title("Episode reward")
+        if not np.all(np.isnan(h["best"])):
+            ax[0, 0].plot(ep, h["best"], color="tab:green", label="best layout so far")
+        if self.greedy_history:
+            ax[0, 0].plot(*zip(*self.greedy_history), "k.", markersize=4, label="greedy agent")
+        lo = np.nanmin([np.nanmin(h["best"]) if not np.all(np.isnan(h["best"])) else np.inf,
+                        np.percentile(h["reward"], 10)])
+        ax[0, 0].set_ylim(lo - 5, max(h["reward"]) + 5)   # exploration crashes would flatten the rest
+        ax[0, 0].legend(loc="lower right")
+        ax[0, 0].set_title("Episode reward (exploring self-play, faint and smoothed)")
         ax[0, 1].plot(ep, h["penalty"], alpha=0.3)
         ax[0, 1].plot(ep[len(ep) - len(smooth(h["penalty"])):], smooth(h["penalty"]))
         ax[0, 1].set_title("Episode penalty")

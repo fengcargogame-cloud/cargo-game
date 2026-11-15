@@ -24,6 +24,9 @@ class CargoTunnelEnv:
         self.step_count = 0
         self._cand_cache: Optional[List[Tuple[CargoPiece, float]]] = None
         self._cut_cache: Optional[List[int]] = None
+        # Per-state memo of placements() and legal_tunnels(); callers must not mutate the lists.
+        self._place_cache: Dict[Tuple[int, int], List[Placement]] = {}
+        self._tunnel_cache: Dict[int, List[int]] = {}
 
     # ---------------- lifecycle ----------------
 
@@ -39,6 +42,8 @@ class CargoTunnelEnv:
         self.step_count = 0
         self._cand_cache = None
         self._cut_cache = None
+        self._place_cache = {}
+        self._tunnel_cache = {}
 
     def clone(self) -> "CargoTunnelEnv":
         env = CargoTunnelEnv(self.config)
@@ -75,7 +80,11 @@ class CargoTunnelEnv:
         """Every raw (unmasked) way to put the piece in the tunnel: whole, cut at max_right, or
         cut early at a cut point strictly inside the segment and short of max_right."""
         left = self.tunnels[tunnel_id].next_left_for(piece)
-        options = []
+        key = (piece.piece_id, left)       # the options depend only on the piece and where it starts
+        cached = self._place_cache.get(key)
+        if cached is not None:
+            return cached
+        options = self._place_cache[key] = []
         if self._fits(left, piece.length):
             options.append(Placement(ActionMode.WHOLE, left + piece.length))
         if self.cut_length(piece, tunnel_id) > 0:
@@ -127,6 +136,12 @@ class CargoTunnelEnv:
         return self._cand_cache
 
     def legal_tunnels(self, piece: CargoPiece) -> List[int]:
+        cached = self._tunnel_cache.get(piece.piece_id)
+        if cached is None:
+            cached = self._tunnel_cache[piece.piece_id] = self._legal_tunnels(piece)
+        return cached
+
+    def _legal_tunnels(self, piece: CargoPiece) -> List[int]:
         raw = [t for t in range(self.config.num_tunnels) if self.placements(piece, t)]
         if not self.config.mask_color_change:
             return self._drop_symmetric(raw)
@@ -228,6 +243,8 @@ class CargoTunnelEnv:
 
         self._cand_cache = None
         self._cut_cache = None
+        self._place_cache = {}
+        self._tunnel_cache = {}
         penalty += self.compute_overflow_penalty() - overflow_before
 
         bonus = cfg.cargo_reward if remainder_len == 0 else 0.0

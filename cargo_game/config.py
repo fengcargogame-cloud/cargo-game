@@ -85,6 +85,10 @@ class GameConfig:
     # as policy targets. Only meaningful when every episode is the same instance, so it is 0 here
     # and switched on in StaticGameConfig.
     elite_fraction: float = 0.0
+    # Chance that an exploring episode first replays a random-length opening of the best line and
+    # only then starts searching and exploring, so effort goes into improving the best layout
+    # instead of rediscovering it. Needs a fixed instance, like elite_fraction.
+    elite_prefix_prob: float = 0.0
     device: str = "cpu"
 
     def episode_pieces(self, rng: random.Random) -> List["CargoPiece"]:
@@ -111,6 +115,12 @@ class DynamicGameConfig(GameConfig):
 class StaticGameConfig(GameConfig):
 
     elite_fraction: float = 0.25
+    elite_prefix_prob: float = 0.5
+    # Rollouts and the best-line replay already explore a fixed instance; heavier noise only makes
+    # self-play erratic without finding the best layout any sooner.
+    noise_all_stages: bool = False
+    dirichlet_frac: float = 0.1
+    temperature_moves: int = 4
  
     # num_colors: int = 4
     # # (length, color, min_left, max_right) per cargo
@@ -259,17 +269,57 @@ class StaticGameConfig(GameConfig):
     #     (1, 8, 7, 8),
     # )
 
-    ### WORKED CONFIGURATION
-    value_scale: float = 40.0            # best return is about +10; anything below -40 is clipped
+    # ### WORKED CONFIGURATION
+    # value_scale: float = 40.0            # best return is about +10; anything below -40 is clipped
+    # num_episodes: int = 5990
+    # mcts_simulations: int = 300
+    # num_tunnels: int = 6
+    # tunnel_length: int = 17
+    # num_colors: int = 9
+    # # (length, color, min_left, max_right) per cargo
+    # pieces: Tuple[Tuple[int, int, int, int], ...] = (
+    #     (15, 0, 0, 4),
+    #     (54, 1, 0, 17),
+    #     (6, 2, 7, 12),
+    #     (11, 3, 7, 17),
+    #     (12, 4, 10, 17), 
+    #     (1, 5, 4, 5),
+    #     (1, 6, 5, 6),
+    #     (1, 7, 6, 7),
+    #     (1, 8, 7, 8),
+    # )
+
+    # ### WORKED CONFIGURATION
+    # value_scale: float = 40.0            # best return is about +10; anything below -40 is clipped
+    # num_episodes: int = 5990
+    # mcts_simulations: int = 300
+    # num_tunnels: int = 9
+    # tunnel_length: int = 17
+    # num_colors: int = 10
+    # # (length, color, min_left, max_right) per cargo
+    # pieces: Tuple[Tuple[int, int, int, int], ...] = (
+    #     (15, 0, 0, 4),
+    #     (54, 1, 0, 17),
+    #     (6, 2, 7, 12),
+    #     (11, 3, 7, 17),
+    #     (12, 4, 10, 17), 
+    #     (1, 5, 4, 5),
+    #     (1, 6, 5, 6),
+    #     (1, 7, 6, 7),
+    #     (1, 8, 7, 8),
+    #     (51, 9, 0, 17),
+    # )
+
+    value_scale: float = 50.0            # best return is about +10; anything below -40 is clipped
     num_episodes: int = 5990
     mcts_simulations: int = 300
-    num_tunnels: int = 6
+    num_tunnels: int = 13
     tunnel_length: int = 17
-    num_colors: int = 9
+    num_colors: int = 10
     # (length, color, min_left, max_right) per cargo
     pieces: Tuple[Tuple[int, int, int, int], ...] = (
         (15, 0, 0, 4),
-        (54, 1, 0, 17),
+        (122, 1, 0, 17),
         (6, 2, 7, 12),
         (11, 3, 7, 17),
         (12, 4, 10, 17), 
@@ -277,6 +327,7 @@ class StaticGameConfig(GameConfig):
         (1, 6, 5, 6),
         (1, 7, 6, 7),
         (1, 8, 7, 8),
+        (51, 9, 0, 17),
     )
 
 
