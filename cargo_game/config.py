@@ -239,16 +239,37 @@ class StaticGameConfig(GameConfig):
     #     (14, 4, 0, 14),
     # )
 
+    ### WORKED CONFIGURATION
+    # value_scale: float = 40.0            # best return is about +10; anything below -40 is clipped
+    # num_episodes: int = 5990
+    # mcts_simulations: int = 300
+    # num_tunnels: int = 4
+    # tunnel_length: int = 17
+    # num_colors: int = 9
+    # # (length, color, min_left, max_right) per cargo
+    # pieces: Tuple[Tuple[int, int, int, int], ...] = (
+    #     (15, 0, 0, 4),
+    #     (20, 1, 3, 17),
+    #     (6, 2, 7, 12),
+    #     (11, 3, 7, 17),
+    #     (12, 4, 10, 17), 
+    #     (1, 5, 4, 5),
+    #     (1, 6, 5, 6),
+    #     (1, 7, 6, 7),
+    #     (1, 8, 7, 8),
+    # )
+
+    ### WORKED CONFIGURATION
     value_scale: float = 40.0            # best return is about +10; anything below -40 is clipped
     num_episodes: int = 5990
     mcts_simulations: int = 300
-    num_tunnels: int = 4
+    num_tunnels: int = 6
     tunnel_length: int = 17
     num_colors: int = 9
     # (length, color, min_left, max_right) per cargo
     pieces: Tuple[Tuple[int, int, int, int], ...] = (
         (15, 0, 0, 4),
-        (20, 1, 3, 17),
+        (54, 1, 0, 17),
         (6, 2, 7, 12),
         (11, 3, 7, 17),
         (12, 4, 10, 17), 
@@ -257,6 +278,7 @@ class StaticGameConfig(GameConfig):
         (1, 7, 6, 7),
         (1, 8, 7, 8),
     )
+
 
     # value_scale: float = 90.0            # returns are about -50..+12.5
     # num_episodes: int = 2000
