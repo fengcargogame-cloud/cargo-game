@@ -221,8 +221,7 @@ class CargoTunnelEnv:
         penalty = 0.0
         if tunnel.last_color is not None and tunnel.last_color != piece.color:
             penalty += cfg.penalty_color_change
-        if tunnel.placed:
-            penalty += (left - tunnel.current_right) * cfg.penalty_gap
+        penalty += (left - tunnel.current_right) * cfg.penalty_gap   # empty cells in front of this cargo
 
         placed_len = choice.end - left
         if action.mode != ActionMode.WHOLE:
@@ -268,7 +267,8 @@ class CargoTunnelEnv:
         return changes * self.config.penalty_color_change
 
     def compute_gap_penalty(self) -> float:
-        gaps = sum(b.left - a.right for t in self.tunnels for a, b in zip(t.placed, t.placed[1:]))
+        # Every empty cell with a cargo somewhere to its right, including cells before the first cargo.
+        gaps = sum(t.placed[-1].right - sum(p.length for p in t.placed) for t in self.tunnels if t.placed)
         return gaps * self.config.penalty_gap
 
     def compute_unplaced_penalty(self) -> float:

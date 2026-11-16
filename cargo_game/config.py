@@ -21,7 +21,7 @@ class GameConfig:
     penalty_exceed_max: float = 8.0
     penalty_color_change: float = 1.0
     penalty_cut: float = 1.5
-    penalty_gap: float = 2.0             # per unit of empty space left between two cargos in a tunnel
+    penalty_gap: float = 2.0             # per empty cell in front of a placed cargo (space after the last cargo is free)
     penalty_unplaced: float = 5.0
     cargo_reward: float = 3.0            # paid each time a cargo is fully placed
     completion_bonus: float = 12.0        # paid once every cargo is placed
