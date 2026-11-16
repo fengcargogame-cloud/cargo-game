@@ -21,10 +21,10 @@ class GameConfig:
     penalty_exceed_max: float = 8.0
     penalty_color_change: float = 1.0
     penalty_cut: float = 1.5
-    penalty_gap: float = 1.5             # per unit of empty space left between two cargos in a tunnel
+    penalty_gap: float = 2.0             # per unit of empty space left between two cargos in a tunnel
     penalty_unplaced: float = 5.0
     cargo_reward: float = 3.0            # paid each time a cargo is fully placed
-    completion_bonus: float = 8.0        # paid once every cargo is placed
+    completion_bonus: float = 12.0        # paid once every cargo is placed
 
     # Game rules
     enforce_tunnel_end: bool = True      # a placed segment may not extend past tunnel_length
@@ -310,102 +310,49 @@ class StaticGameConfig(GameConfig):
     #     (51, 9, 0, 17),
     # )
 
-    value_scale: float = 50.0            # best return is about +10; anything below -40 is clipped
-    num_episodes: int = 5990
+    ### WORKED CONFIGURATION
+    # value_scale: float = 50.0            # best return is about +10; anything below -40 is clipped
+    # num_episodes: int = 5990
+    # mcts_simulations: int = 300
+    # num_tunnels: int = 13
+    # tunnel_length: int = 17
+    # num_colors: int = 10
+    # # (length, color, min_left, max_right) per cargo
+    # pieces: Tuple[Tuple[int, int, int, int], ...] = (
+    #     (15, 0, 0, 4),
+    #     (122, 1, 0, 17),
+    #     (6, 2, 7, 12),
+    #     (11, 3, 7, 17),
+    #     (12, 4, 10, 17), 
+    #     (1, 5, 4, 5),
+    #     (1, 6, 5, 6),
+    #     (1, 7, 6, 7),
+    #     (1, 8, 7, 8),
+    #     (51, 9, 0, 17),
+    # )
+
+
+
+    value_scale: float = 50.0            # returns are about -50..+12.5
+    num_episodes: int = 2000
     mcts_simulations: int = 300
-    num_tunnels: int = 13
-    tunnel_length: int = 17
-    num_colors: int = 10
+    num_tunnels: int = 18
+    tunnel_length: int = 18
+    num_colors: int = 11
     # (length, color, min_left, max_right) per cargo
     pieces: Tuple[Tuple[int, int, int, int], ...] = (
-        (15, 0, 0, 4),
-        (122, 1, 0, 17),
-        (6, 2, 7, 12),
-        (11, 3, 7, 17),
-        (12, 4, 10, 17), 
-        (1, 5, 4, 5),
-        (1, 6, 5, 6),
-        (1, 7, 6, 7),
-        (1, 8, 7, 8),
-        (51, 9, 0, 17),
+        (51, 0, 0, 17),
+        (15, 1, 0, 4),
+        (140, 2, 0, 18),
+        (64, 3, 0, 16),
+        (1, 4, 4, 5), 
+        (1, 5, 5, 6),
+        (1, 6, 6, 7),
+        (1, 7, 7, 8),
+        (6, 8, 7, 12),
+        (11, 9, 7, 17),
+        (12, 10, 10, 17),
     )
-
-
-    # value_scale: float = 90.0            # returns are about -50..+12.5
-    # num_episodes: int = 2000
-    # mcts_simulations: int = 300
-    # num_tunnels: int = 18
-    # tunnel_length: int = 18
-    # num_colors: int = 11
-    # # (length, color, min_left, max_right) per cargo
-    # pieces: Tuple[Tuple[int, int, int, int], ...] = (
-    #     (51, 0, 0, 17),
-    #     (15, 1, 0, 4),
-    #     (140, 2, 0, 18),
-    #     (64, 3, 0, 16),
-    #     (1, 4, 4, 5), 
-    #     (1, 5, 5, 6),
-    #     (1, 6, 6, 7),
-    #     (1, 7, 7, 8),
-    #     (6, 8, 7, 12),
-    #     (11, 9, 7, 17),
-    #     (12, 10, 10, 17),
-    # )
-
-    # penalty_exceed_max: float = 15.0
-    # penalty_color_change: float = 1.0
-    # penalty_cut: float = 1.0
-    # penalty_gap: float = 1.0
-    # penalty_unplaced: float = 5.0
-    # cargo_reward: float = 5.0            # paid each time a cargo is fully placed
-    # completion_bonus: float = 5.0        # paid once every cargo is placed
-
-    # value_scale: float = 150.0            # returns are about -50..+12.5
-    # num_episodes: int = 2000
-    # mcts_simulations: int = 300
-    # num_tunnels: int = 9
-    # tunnel_length: int = 17
-    # num_colors: int = 10
-    # # (length, color, min_left, max_right) per cargo
-    # pieces: Tuple[Tuple[int, int, int, int], ...] = (
-    #     (51, 0, 0, 17),
-    #     (15, 1, 0, 4),
-    #     (50, 2, 0, 18),
-    #     (1, 3, 4, 5), 
-    #     (1, 4, 5, 6),
-    #     (1, 5, 6, 7),
-    #     (1, 6, 7, 8),
-    #     (6, 7, 7, 12),
-    #     (11, 8, 7, 17),
-    #     (12, 9, 10, 17),
-    # )
-
-    # penalty_exceed_max: float = 10.0
-    # penalty_color_change: float = 1.0
-    # penalty_cut: float = 1.5
-    # penalty_gap: float = 1.0
-    # penalty_unplaced: float = 3.0
-    # cargo_reward: float = 8.0            # paid each time a cargo is fully placed
-    # completion_bonus: float = 20.0        # paid once every cargo is placed
-
-    # value_scale: float = 100.0            # returns are about -50..+12.5
-    # num_episodes: int = 2000
-    # mcts_simulations: int = 300
-    # num_tunnels: int = 6
-    # tunnel_length: int = 17
-    # num_colors: int = 10
-    # # (length, color, min_left, max_right) per cargo
-    # pieces: Tuple[Tuple[int, int, int, int], ...] = (
-    #     (15, 1, 0, 4),
-    #     (50, 2, 0, 18),
-    #     (1, 3, 4, 5), 
-    #     (1, 4, 5, 6),
-    #     (1, 5, 6, 7),
-    #     (1, 6, 7, 8),
-    #     (6, 7, 7, 12),
-    #     (11, 8, 7, 17),
-    #     (12, 9, 10, 17),
-    # )
 
     def __post_init__(self) -> None:
         for i, piece in enumerate(self.pieces):

@@ -221,8 +221,8 @@ class CargoTunnelEnv:
         penalty = 0.0
         if tunnel.last_color is not None and tunnel.last_color != piece.color:
             penalty += cfg.penalty_color_change
-        # if tunnel.placed:
-        #     penalty += (left - tunnel.current_right) * cfg.penalty_gap
+        if tunnel.placed:
+            penalty += (left - tunnel.current_right) * cfg.penalty_gap
 
         placed_len = choice.end - left
         if action.mode != ActionMode.WHOLE:
@@ -282,7 +282,7 @@ class CargoTunnelEnv:
         return (
             self.compute_overflow_penalty()
             + self.compute_color_change_penalty()
-            # + self.compute_gap_penalty()
+            + self.compute_gap_penalty()
             + self.num_cuts * self.config.penalty_cut
             + (self.compute_unplaced_penalty() if self.is_terminal() else 0.0)
         )
@@ -378,7 +378,7 @@ class CargoTunnelEnv:
                  f"Steps={self.step_count} | Cuts={self.num_cuts} | Unassigned={len(self.unassigned)}",
                  f"Penalty: overflow={self.compute_overflow_penalty():.1f} "
                  f"color={self.compute_color_change_penalty():.1f} "
-                 # f"gap={self.compute_gap_penalty():.1f} "
+                 f"gap={self.compute_gap_penalty():.1f} "
                  f"cut={self.num_cuts * self.config.penalty_cut:.1f} "
                  f"total={self.total_penalty():.1f}"]
         for t in self.tunnels:
