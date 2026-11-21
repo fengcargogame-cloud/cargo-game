@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cargo Trainer Map</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: one reading column; each section is a figure + the math that the figure points at. */
+:root {
+  --bg: #F5F7FA; --panel: #FFFFFF; --fg: #18202C; --muted: #5A6577; --line: #C6CDD8;
+  --accent: #2456C4; --accent-soft: #E3EBFB; --elite: #B25A06; --elite-soft: #FBEEDD;
+  --display: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11151C; --panel: #1A2029; --fg: #E5E9F0; --muted: #9AA4B5; --line: #3A4352;
+  --accent: #82A8FF; --accent-soft: #1D2A45; --elite: #F0A54A; --elite-soft: #3A2A16; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #11151C; --panel: #1A2029; --fg: #E5E9F0; --muted: #9AA4B5; --line: #3A4352;
+  --accent: #82A8FF; --accent-soft: #1D2A45; --elite: #F0A54A; --elite-soft: #3A2A16; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font: 15px/1.6 var(--body); }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 40px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 56px; }
+header { display: flex; flex-direction: column; gap: 10px; max-width: 70ch; }
+.eyebrow { font: 500 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font: 600 clamp(28px, 4.4vw, 40px)/1.15 var(--display); margin: 0; text-wrap: balance; }
+h2 { font: 600 22px/1.25 var(--display); margin: 0; text-wrap: balance; }
+h3 { font: 600 15px/1.3 var(--body); margin: 0; }
+p { margin: 0; max-width: 70ch; }
+.lede { color: var(--muted); font-size: 16px; }
+section { display: flex; flex-direction: column; gap: 18px; }
+code, .m { font-family: var(--mono); font-size: .92em; }
+figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  display: flex; flex-direction: column; }
+.scroll { overflow-x: auto; padding: 16px 12px 8px; }
+figure svg { display: block; width: 100%; min-width: 720px; height: auto; color: var(--fg); }
+figcaption { padding: 12px 18px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+
+/* SVG classes (styled from page CSS so the tokens apply in both themes) */
+.box { fill: var(--panel); stroke: var(--line); stroke-width: 1.2; }
+.box-acc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.4; }
+.box-el { fill: var(--elite-soft); stroke: var(--elite); stroke-width: 1.4; }
+.t { fill: var(--fg); font: 600 14px var(--body); }
+.s { fill: var(--muted); font: 400 12px var(--body); }
+.k { fill: var(--muted); font: 400 12px var(--mono); }
+.ka { fill: var(--accent); font: 500 12px var(--mono); }
+.ke { fill: var(--elite); font: 500 12px var(--mono); }
+.lab { fill: var(--muted); font: 600 11px var(--mono); letter-spacing: .06em; }
+.ln { stroke: var(--line); stroke-width: 1.4; fill: none; }
+.lf { stroke: var(--fg); stroke-width: 1.4; fill: none; }
+.la { stroke: var(--accent); stroke-width: 2; fill: none; }
+.le { stroke: var(--elite); stroke-width: 2; fill: none; }
+.dash { stroke-dasharray: 5 4; }
+.mk-f { fill: var(--fg); } .mk-a { fill: var(--accent); } .mk-e { fill: var(--elite); } .mk-n { fill: var(--line); }
+.dot { fill: var(--panel); stroke: var(--line); stroke-width: 1.4; }
+.dot-a { fill: var(--accent); stroke: var(--accent); }
+.sq { fill: var(--panel); stroke: var(--fg); stroke-width: 1.4; }
+.sq-a { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+
+/* Math cards */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card.el { border-color: var(--elite); }
+.eq { font: 400 14px/1.7 var(--mono); background: var(--bg); border-radius: 4px; padding: 10px 12px;
+  overflow-x: auto; white-space: nowrap; }
+.eq .v { color: var(--accent); } .eq .e { color: var(--elite); }
+.card p { font-size: 14px; color: var(--muted); }
+.src { font: 400 12px var(--mono); color: var(--muted); }
+</style>
+</head>
+<body style="margin:0">
+
+<div class="wrap">
+<header>
+  <span class="eyebrow">cargo_game · trainer.py, mcts.py, network.py</span>
+  <h1>How the cargo agent trains</h1>
+  <p class="lede">An AlphaZero-style loop with two additions for a deterministic single-player puzzle: the search tracks the <em>best finished line</em> next to the mean, and the best whole game found so far is fed back into every batch as an imitation target.</p>
+</header>
+
+<!-- ============ FIG 1: outer loop ============ -->
+<section>
+  <h2>1 · The outer loop</h2>
+  <p>Each episode plays one full game with search, stores one sample per move, then runs 8 gradient steps. The blue cycle is plain AlphaZero. The orange path is the elite line, which only runs with <code>StaticGameConfig</code> (same instance every episode).</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 980 390" role="img" aria-label="Training cycle: the network feeds MCTS, MCTS drives self-play, self-play fills the replay buffer, batches from the replay buffer and the elite line train the network.">
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mk-a"/></marker>
+        <marker id="e1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mk-e"/></marker>
+      </defs>
+      <!-- boxes -->
+      <rect class="box-acc" x="30" y="50" width="220" height="84" rx="6"/>
+      <text class="t" x="140" y="86" text-anchor="middle">Policy-value net f<tspan font-size="11">θ</tspan></text>
+      <text class="s" x="140" y="108" text-anchor="middle">priors P and values v, 3 stages</text>
+
+      <rect class="box" x="370" y="50" width="220" height="84" rx="6"/>
+      <text class="t" x="480" y="86" text-anchor="middle">Hierarchical MCTS</text>
+      <text class="s" x="480" y="108" text-anchor="middle">160 simulations per move</text>
+
+      <rect class="box" x="710" y="50" width="220" height="84" rx="6"/>
+      <text class="t" x="820" y="86" text-anchor="middle">Self-play episode</text>
+      <text class="s" x="820" y="108" text-anchor="middle">move chosen from visit counts</text>
+
+      <rect class="box" x="710" y="280" width="220" height="84" rx="6"/>
+      <text class="t" x="820" y="316" text-anchor="middle">Replay buffer</text>
+      <text class="s" x="820" y="338" text-anchor="middle">newest 20,000 samples</text>
+
+      <rect class="box" x="370" y="280" width="220" height="84" rx="6"/>
+      <text class="t" x="480" y="316" text-anchor="middle">Mini-batch of 64</text>
+      <text class="s" x="480" y="338" text-anchor="middle">48 replay + 16 elite</text>
+
+      <rect class="box" x="30" y="280" width="220" height="84" rx="6"/>
+      <text class="t" x="140" y="316" text-anchor="middle">train_step × 8</text>
+      <text class="s" x="140" y="338" text-anchor="middle">AdamW, grad-norm clip 1.0</text>
+
+      <rect class="box-el" x="400" y="178" width="160" height="58" rx="6"/>
+      <text class="t" x="480" y="203" text-anchor="middle">Best line</text>
+      <text class="s" x="480" y="222" text-anchor="middle">highest total reward</text>
+
+      <!-- main loop -->
+      <line class="la" x1="250" y1="92" x2="366" y2="92" marker-end="url(#a1)"/>
+      <text class="ka" x="308" y="82" text-anchor="middle">P, v per node</text>
+      <line class="la" x1="590" y1="92" x2="706" y2="92" marker-end="url(#a1)"/>
+      <text class="ka" x="648" y="82" text-anchor="middle">π = N / ΣN</text>
+      <line class="la" x1="820" y1="134" x2="820" y2="276" marker-end="url(#a1)"/>
+      <text class="ka" x="830" y="200">(s, π, z)</text>
+      <text class="k" x="830" y="216">per move</text>
+      <line class="la" x1="710" y1="322" x2="594" y2="322" marker-end="url(#a1)"/>
+      <text class="ka" x="652" y="312" text-anchor="middle">uniform</text>
+      <line class="la" x1="370" y1="322" x2="254" y2="322" marker-end="url(#a1)"/>
+      <text class="ka" x="312" y="312" text-anchor="middle">loss L</text>
+      <line class="la" x1="140" y1="280" x2="140" y2="138" marker-end="url(#a1)"/>
+      <text class="ka" x="150" y="204">θ ← θ − η∇L</text>
+      <text class="k" x="150" y="220">lr 1e-3</text>
+
+      <!-- elite -->
+      <line class="le" x1="450" y1="134" x2="450" y2="174" marker-end="url(#e1)"/>
+      <text class="ke" x="440" y="158" text-anchor="end">rollout finished game</text>
+      <line class="le" x1="742" y1="134" x2="564" y2="196" marker-end="url(#e1)"/>
+      <text class="ke" x="660" y="190">full game, if better</text>
+      <line class="le" x1="510" y1="236" x2="510" y2="276" marker-end="url(#e1)"/>
+      <text class="ke" x="520" y="260">25% of batch</text>
+      <path class="le dash" d="M560 222 C 640 240, 690 200, 712 128" marker-end="url(#e1)"/>
+      <text class="ke" x="640" y="248">replay its opening (p = 0.5)</text>
+    </svg>
+    </div>
+    <figcaption>One episode = one turn of the blue cycle. The best line is updated by <code>_adopt_line</code> whenever a game, from self-play or from a search rollout, beats the best total so far. Its moves become one-hot policy targets in a quarter of every batch, and half of the exploring episodes start by replaying a random-length prefix of it.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ FIG 2: one move = 3-level tree ============ -->
+<section>
+  <h2>2 · One move is three tree levels</h2>
+  <p>An action is <span class="m">(piece, tunnel, placement)</span>. Instead of one huge branching factor, the tree splits it into three decisions, each with its own network head. Only the third level calls <code>env.step</code>.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 980 420" role="img" aria-label="Search tree for one move: a real state branches into pieces, each piece into tunnels, each tunnel into placements that lead to the next real state with a reward.">
+      <defs>
+        <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-a"/></marker>
+      </defs>
+      <!-- row labels left -->
+      <text class="lab" x="24" y="56">STAGE 0 · REAL STATE s</text>
+      <text class="k" x="24" y="74">head 0: piece logits, v₀ ≈ V(s)</text>
+      <text class="lab" x="24" y="156">STAGE 1 · PIECE CHOSEN</text>
+      <text class="k" x="24" y="174">head 1: tunnel logits, v₁ ≈ Q(s,p)</text>
+      <text class="lab" x="24" y="256">STAGE 2 · TUNNEL CHOSEN</text>
+      <text class="k" x="24" y="274">head 2: option logits, v₂ ≈ Q(s,p,t)</text>
+      <text class="lab" x="24" y="356">NEXT REAL STATE s′</text>
+      <text class="k" x="24" y="374">env.step(action) → reward r</text>
+
+      <!-- edges root -> pieces -->
+      <line class="ln" x1="520" y1="78" x2="400" y2="144"/>
+      <line class="la" x1="520" y1="78" x2="520" y2="142" marker-end="url(#a2)"/>
+      <line class="ln" x1="520" y1="78" x2="640" y2="144"/>
+      <!-- piece -> tunnels -->
+      <line class="ln" x1="520" y1="176" x2="420" y2="244"/>
+      <line class="la" x1="520" y1="176" x2="520" y2="242" marker-end="url(#a2)"/>
+      <line class="ln" x1="520" y1="176" x2="620" y2="244"/>
+      <!-- tunnel -> next states -->
+      <line class="ln" x1="520" y1="276" x2="420" y2="343"/>
+      <line class="la" x1="520" y1="276" x2="520" y2="341" marker-end="url(#a2)"/>
+      <line class="ln" x1="520" y1="276" x2="620" y2="343"/>
+      <text class="k" x="462" y="312" text-anchor="end">whole</text>
+      <text class="ka" x="528" y="314">cut @ max</text>
+      <text class="k" x="586" y="306">early cut</text>
+
+      <!-- nodes -->
+      <rect class="sq" x="502" y="42" width="36" height="36" rx="3"/>
+      <circle class="dot" cx="400" cy="160" r="15"/>
+      <circle class="dot-a" cx="520" cy="160" r="15"/>
+      <circle class="dot" cx="640" cy="160" r="15"/>
+      <text class="k" x="676" y="164">…</text>
+      <circle class="dot" cx="420" cy="260" r="15"/>
+      <circle class="dot-a" cx="520" cy="260" r="15"/>
+      <circle class="dot" cx="620" cy="260" r="15"/>
+      <text class="k" x="656" y="264">…</text>
+      <rect class="sq" x="404" y="343" width="32" height="32" rx="3"/>
+      <rect class="sq-a" x="504" y="343" width="32" height="32" rx="3"/>
+      <rect class="sq" x="604" y="343" width="32" height="32" rx="3"/>
+      <text class="s" x="520" y="400" text-anchor="middle">becomes the next root (subtree reused)</text>
+
+      <!-- right notes -->
+      <text class="k" x="740" y="102">prior = 0.75·softmax + 0.25·urgency</text>
+      <text class="k" x="740" y="120">keep top 15 pieces</text>
+      <text class="k" x="740" y="208">legal tunnels only</text>
+      <text class="k" x="740" y="226">keep top 10</text>
+      <text class="k" x="740" y="306">all legal placements</text>
+      <text class="k" x="740" y="324">edge reward = r / 50</text>
+    </svg>
+    </div>
+    <figcaption>Squares are real game states, circles are half-made decisions that share their parent's state. The encoder runs once per real state and its output is cached, so stages 1 and 2 only run their small heads. After search, the agent picks a child at each level in turn (blue path), records the three visit distributions as targets, and steps the env.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ FIG 3: one simulation ============ -->
+<section>
+  <h2>3 · One simulation backs up two numbers</h2>
+  <p>Because the game is deterministic and single-player, a finished line is a guaranteed result, not a sample. So each node keeps the usual running mean <em>and</em> the best real return seen through it, and selection uses a blend of both.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 980 330" role="img" aria-label="One simulation: select down to a leaf, expand it with the network to get v, roll it out to get a real return R, then back up v into the mean and R into the best value of every node on the path.">
+      <defs>
+        <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-a"/></marker>
+        <marker id="e3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-e"/></marker>
+        <marker id="f3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-f"/></marker>
+      </defs>
+      <!-- path down -->
+      <line class="lf" x1="490" y1="68" x2="490" y2="104" marker-end="url(#f3)"/>
+      <line class="lf" x1="490" y1="136" x2="490" y2="174" marker-end="url(#f3)"/>
+      <line class="lf" x1="490" y1="206" x2="490" y2="242" marker-end="url(#f3)"/>
+      <rect class="sq" x="472" y="32" width="36" height="36" rx="3"/>
+      <circle class="dot" cx="490" cy="120" r="15"/>
+      <circle class="dot" cx="490" cy="190" r="15"/>
+      <rect class="sq" x="472" y="244" width="36" height="36" rx="3"/>
+      <text class="s" x="490" y="304" text-anchor="middle">new leaf s_L</text>
+      <text class="k" x="510" y="92">select:</text>
+      <text class="k" x="510" y="160">max PUCT</text>
+
+      <!-- left: rollout -> best -->
+      <rect class="box-el" x="200" y="240" width="180" height="44" rx="6"/>
+      <text class="t" x="290" y="260" text-anchor="middle">Rollout to game end</text>
+      <text class="s" x="290" y="276" text-anchor="middle">cheap gap-avoiding policy</text>
+      <line class="le dash" x1="470" y1="262" x2="384" y2="262" marker-end="url(#e3)"/>
+      <line class="le" x1="420" y1="240" x2="420" y2="50" marker-end="url(#e3)"/>
+      <text class="ke" x="410" y="110" text-anchor="end">b ← r + γ·b  (starts at R)</text>
+      <text class="ke" x="410" y="128" text-anchor="end">best ← max(best, b)</text>
+      <text class="k" x="410" y="160" text-anchor="end">a real, achievable return</text>
+
+      <!-- right: net -> mean -->
+      <rect class="box-acc" x="600" y="240" width="180" height="44" rx="6"/>
+      <text class="t" x="690" y="260" text-anchor="middle">Expand with f<tspan font-size="11">θ</tspan></text>
+      <text class="s" x="690" y="276" text-anchor="middle">children priors P, value v</text>
+      <line class="la dash" x1="510" y1="262" x2="596" y2="262" marker-end="url(#a3)"/>
+      <line class="la" x1="560" y1="240" x2="560" y2="50" marker-end="url(#a3)"/>
+      <text class="ka" x="572" y="110">g ← r + γ·g  (starts at v)</text>
+      <text class="ka" x="572" y="128">visits += 1, sum += g</text>
+      <text class="k" x="572" y="160">mean = sum / visits</text>
+    </svg>
+    </div>
+    <figcaption>Every one of the 160 simulations does select → expand → (rollout) → backup. The rollout only runs when the new leaf is a real state (stage 0). Any rollout whose whole line beats the previous best is remembered as <code>mcts.found</code>; that is the orange "rollout finished game" arrow in figure 1.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ math cards ============ -->
+<section>
+  <h2>4 · The formulas</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Selection score (PUCT)</h3>
+      <div class="eq">score(a) = norm(Q(a)) + c · P(a) · √N(parent) / (1 + N(a))</div>
+      <p><span class="m">c = 1.5</span>. <span class="m">norm</span> rescales Q to [0, 1] with the min and max seen in this search, so big penalties don't swamp the prior term.</p>
+      <span class="src">mcts.py · _select, MinMaxStats</span>
+    </div>
+    <div class="card">
+      <h3>Child value used by selection</h3>
+      <div class="eq">Q(a) = r + γ · [ (1−w)·<span class="v">mean</span> + w·<span class="e">best</span> ]</div>
+      <p><span class="m">w = 0.5</span>, <span class="m">γ = 1</span>. An unvisited child borrows its parent's mean. With <span class="m">w = 0</span> this is plain AlphaZero.</p>
+      <span class="src">mcts.py · Node.q, _child_q</span>
+    </div>
+    <div class="card">
+      <h3>Exploration noise</h3>
+      <div class="eq">P ← (1−f)·P + f·Dir(α)</div>
+      <p><span class="m">α = 0.5</span>; <span class="m">f = 0.25</span> (dynamic) or 0.1 (static). Applied at the root's piece level, and on the tunnel and placement levels too unless <code>noise_all_stages</code> is off.</p>
+      <span class="src">mcts.py · _add_dirichlet</span>
+    </div>
+    <div class="card">
+      <h3>Rollout policy</h3>
+      <div class="eq">cost = 3·gap_cells + 8·overflow_cells</div>
+      <p>Piece drawn with odds ∝ <span class="m">exp(4·urgency − min cost)</span>, then its tunnel ∝ <span class="m">exp(−cost)</span>, then a random legal placement.</p>
+      <span class="src">mcts.py · _waste, _rollout</span>
+    </div>
+    <div class="card">
+      <h3>Picking the move</h3>
+      <div class="eq">π(a) = N(a) / Σ<sub>b</sub> N(b)</div>
+      <p>Sampled from π for the first 8 moves (4 static), argmax after. The greedy evaluation game instead follows the best known finished plan and only switches if the search finds a better one.</p>
+      <span class="src">mcts.py · visit_policy, pick · trainer.py · plan</span>
+    </div>
+    <div class="card">
+      <h3>Value target</h3>
+      <div class="eq">z<sub>t</sub> = clip( Σ<sub>k</sub> γ<sup>k</sup> r<sub>t+k</sub> / 50, −1, 1 )</div>
+      <p>Return-to-go from move t, scaled by <code>value_scale</code> so it fits the tanh value heads. The same z trains all three value heads.</p>
+      <span class="src">trainer.py · self_play_episode</span>
+    </div>
+    <div class="card">
+      <h3>Loss per batch</h3>
+      <div class="eq">L = Σ<sub>i∈{0,1,2}</sub> [ CE(π<sub>i</sub>, softmax(logits<sub>i</sub>)) + (v<sub>i</sub> − z)² ]</div>
+      <p>Soft cross-entropy against the visit distribution at each stage, plus MSE for each value head. Heads 1 and 2 are run on the piece and tunnel that were actually played.</p>
+      <span class="src">trainer.py · soft_ce, train_step</span>
+    </div>
+    <div class="card el">
+      <h3>Elite samples</h3>
+      <div class="eq">π<sub>i</sub> = one-hot(<span class="e">best line's move</span>)</div>
+      <p>16 of every 64 samples come from the best game so far, so the policy is pulled toward that exact layout while the replay share keeps it general. Only active with <span class="m">elite_fraction &gt; 0</span>.</p>
+      <span class="src">trainer.py · _adopt_line, sample_batch</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FIG 5: network ============ -->
+<section>
+  <h2>5 · Where the losses attach</h2>
+  <p>One shared encoder, three small heads chained by the choice made at the previous stage.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 980 300" role="img" aria-label="Network: tunnel, piece and global features go through a shared transformer encoder; three chained heads produce piece, tunnel and placement logits and values, each with its own loss.">
+      <defs>
+        <marker id="f5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-f"/></marker>
+        <marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-a"/></marker>
+      </defs>
+      <rect class="box" x="20" y="40" width="150" height="44" rx="6"/>
+      <text class="t" x="95" y="67" text-anchor="middle">tunnel tokens ×K</text>
+      <rect class="box" x="20" y="124" width="150" height="44" rx="6"/>
+      <text class="t" x="95" y="151" text-anchor="middle">piece tokens ×M</text>
+      <rect class="box" x="20" y="208" width="150" height="44" rx="6"/>
+      <text class="t" x="95" y="235" text-anchor="middle">global features</text>
+
+      <rect class="box-acc" x="220" y="40" width="180" height="212" rx="6"/>
+      <text class="t" x="310" y="120" text-anchor="middle">Shared encoder</text>
+      <text class="s" x="310" y="140" text-anchor="middle">transformer, 2 layers</text>
+      <text class="s" x="310" y="156" text-anchor="middle">4 heads, d = 64</text>
+      <text class="k" x="310" y="190" text-anchor="middle">→ g, p_emb, t_emb</text>
+
+      <line class="lf" x1="170" y1="62" x2="216" y2="62" marker-end="url(#f5)"/>
+      <line class="lf" x1="170" y1="146" x2="216" y2="146" marker-end="url(#f5)"/>
+      <line class="lf" x1="170" y1="230" x2="216" y2="230" marker-end="url(#f5)"/>
+
+      <rect class="box" x="470" y="20" width="260" height="66" rx="6"/>
+      <text class="t" x="486" y="46">Stage 0 · piece</text>
+      <text class="k" x="486" y="68">pointer(p_emb, g), v₀(g)</text>
+      <rect class="box" x="470" y="116" width="260" height="66" rx="6"/>
+      <text class="t" x="486" y="142">Stage 1 · tunnel</text>
+      <text class="k" x="486" y="164">ctx₁=MLP(g, e_piece), v₁</text>
+      <rect class="box" x="470" y="212" width="260" height="66" rx="6"/>
+      <text class="t" x="486" y="238">Stage 2 · placement</text>
+      <text class="k" x="486" y="260">ctx₂=MLP(ctx₁, key_t), v₂</text>
+
+      <line class="lf" x1="400" y1="62" x2="466" y2="54" marker-end="url(#f5)"/>
+      <line class="lf" x1="400" y1="150" x2="466" y2="150" marker-end="url(#f5)"/>
+      <text class="k" x="434" y="142" text-anchor="middle">+ pair</text>
+      <line class="la" x1="680" y1="86" x2="680" y2="112" marker-end="url(#a5)"/>
+      <text class="ka" x="690" y="104">chosen piece</text>
+      <line class="la" x1="680" y1="182" x2="680" y2="208" marker-end="url(#a5)"/>
+      <text class="ka" x="690" y="200">chosen tunnel</text>
+      <line class="lf" x1="400" y1="245" x2="466" y2="245" marker-end="url(#f5)"/>
+      <text class="k" x="434" y="237" text-anchor="middle">options</text>
+
+      <line class="ln" x1="730" y1="53" x2="776" y2="53"/>
+      <line class="ln" x1="730" y1="149" x2="776" y2="149"/>
+      <line class="ln" x1="730" y1="245" x2="776" y2="245"/>
+      <text class="k" x="784" y="48">CE(π_piece)</text>
+      <text class="k" x="784" y="64">+ (v₀ − z)²</text>
+      <text class="k" x="784" y="144">CE(π_tunnel)</text>
+      <text class="k" x="784" y="160">+ (v₁ − z)²</text>
+      <text class="k" x="784" y="240">CE(π_mode)</text>
+      <text class="k" x="784" y="256">+ (v₂ − z)²</text>
+    </svg>
+    </div>
+    <figcaption>All six terms are summed into one loss and one backward pass. During search the same heads are called lazily: head 0 when a real state is expanded, heads 1 and 2 only when the tree reaches that piece or tunnel, reusing the cached encoder output.</figcaption>
+  </figure>
+</section>
+</div>
+</body>
+</html>
